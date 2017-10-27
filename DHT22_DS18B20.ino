@@ -2,48 +2,40 @@
 #include <LiquidCrystal_I2C.h>
 #include <OneWire.h>
 
-#define DHTPIN 3          // DHT data pin
+#define DHTPIN 2          // DHT data pin
 #define DSPIN 5           // DS18B20 data pin
+#define BACKLIGHTPIN 3    // LCD backlight
 
-LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
+LiquidCrystal_I2C lcd(0x27,2,1,0,4,5,6,7);
  
 DHT dht;
 OneWire ds(DSPIN);
 
 byte addr[8];
 
+float tempDHT_prev, tempDS_prev;
+byte h_prev, backlight = 0;
+
 void setup()
 {
-  Serial.begin(9600);
-  
-  pinMode(2, OUTPUT);
-  pinMode(4, OUTPUT);
-  digitalWrite(2, LOW);
-  digitalWrite(4, HIGH);
+  // Serial.begin(9600);
   
   lcd.begin(16, 2);
+  lcd.setBacklightPin(BACKLIGHTPIN,POSITIVE);
+  lcd.setBacklight(1);
   lcd.backlight();
   
   dht.setup(DHTPIN);            // DHT sensor initialization
   ds.reset_search();
-
-  // lcd.print(F("Init DS18B20"));
-  // lcd.setCursor(0,1);
-  Serial.println("Init DS18B20");
   
-  while(ds.search(addr))
-  {
+  while(ds.search(addr)) {
     if (addr[0] != 0x28)
       continue;
-    if (OneWire::crc8(addr, 7) != addr[7])
-    {
-      lcd.print(F("CRC is not valid!"));
-      Serial.println("CRC is not valid!");
+    if (OneWire::crc8(addr, 7) != addr[7]){
+      lcd.print(F("DS:CRC is not valid!"));
     }
     delay(250);
   }
-  Serial.println("Sensors initialization complete.");
-  Serial.println("1 - Temp DS, 2 - Temp DHT, 3 - humidity");
   lcd.clear();
   lcd.print(F("DHT: "));
   lcd.setCursor(0,1);
@@ -105,20 +97,30 @@ void loop()
   tempDS = (float)raw / 16.0;
   //fahrenheit = celsius * 1.8 + 32.0;
 
-  tempDHT = dht.getTemperature();  // odczyt temperatury
-  h = dht.getHumidity();  // odczyt wilgotnoĹ›ci powietrza
+  tempDHT = dht.getTemperature();
+  h = dht.getHumidity();
 
-  Serial.print(tempDS);
-  Serial.print(F(","));
-  Serial.print(tempDHT);
-  Serial.print(F(","));
-  Serial.println(h);
+  if(tempDS != tempDS_prev || tempDHT != tempDHT_prev || h != h_prev) {
+    lcd.setBacklight(1);
+    backlight = 0;
+  }
+
+  tempDS_prev = tempDS;
+  tempDHT_prev = tempDHT;
+  h_prev = h;
+  
   lcd.setCursor(5,0);
+  if(tempDHT < 10) lcd.print(F(" "));
   lcd.print(tempDHT);
   lcd.setCursor(13,0);
   lcd.print(h);
   lcd.setCursor(5,1);
+  if(tempDS < 10 && tempDS > 0) lcd.print(F(" "));
   lcd.print(tempDS);
   
   delay(1000); //wait a second between transfers
+  
+  backlight++;
+  
+  if(backlight > 10) lcd.setBacklight(0);
 }
