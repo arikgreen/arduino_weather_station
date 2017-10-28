@@ -93,6 +93,9 @@ void loop()
     else if (cfg == 0x40) raw = raw & ~1; // 11 bit res, 375 ms
     //// default is 12 bit resolution, 750 ms conversion time
   }
+  lcd.setCursor(15,1);
+  lcd.print(F("*"));
+  delay(500);
   
   tempDS = (float)raw / 16.0;
   //fahrenheit = celsius * 1.8 + 32.0;
@@ -100,7 +103,7 @@ void loop()
   tempDHT = dht.getTemperature();
   h = dht.getHumidity();
 
-  if(tempDS != tempDS_prev || tempDHT != tempDHT_prev || h != h_prev) {
+  if(abs(tempDS-tempDS_prev)>=0.1  || abs(tempDHT-tempDHT_prev)>=0.1 || abs(h-h_prev)>=2) {
     lcd.setBacklight(1);
     backlight = 0;
   }
@@ -118,7 +121,9 @@ void loop()
   if(tempDS < 10 && tempDS > 0) lcd.print(F(" "));
   lcd.print(tempDS);
   
-  delay(1000); //wait a second between transfers
+  lcd.setCursor(15,1);
+  lcd.print(F(" "));
+  delay(500); //wait between transfers
   
   backlight++;
   
