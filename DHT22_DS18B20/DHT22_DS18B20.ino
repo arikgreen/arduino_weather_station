@@ -1,4 +1,4 @@
-#include "DHT.h"          // DHTxx sensors library
+#include <DHT.h>          // DHT11/DHT22/AM2302/RHT03
 #include <LiquidCrystal_I2C.h>
 #include <OneWire.h>
 
