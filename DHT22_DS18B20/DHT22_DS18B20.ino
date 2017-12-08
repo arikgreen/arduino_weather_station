@@ -2,12 +2,12 @@
 #include <LiquidCrystal_I2C.h>
 #include <OneWire.h>
 
-#define VERSION "0.4.8"
+#define VERSION "0.4.9"
 #define DHTPIN 2          // DHT data pin
 #define DSPIN 5           // DS18B20 data pin
 #define BACKLIGHTPIN 3    // LCD backlight
 #define BTNPIN 6          // button
-#define BEEPPIN 4         // beep
+#define PIRPIN 8          // PIR
 
 LiquidCrystal_I2C lcd(0x27,2,1,0,4,5,6,7);
  
@@ -16,12 +16,22 @@ OneWire ds(DSPIN);
 
 byte addr[8];
 
+/*
+ * backlight          - backlight time
+ * readSensorPeriod   - the frequency of reading the sensors
+ * h_prev             - previous humidity
+ * tempDHT_prev       - previous temperature from DHT sensor
+ * tempDS_prev        - previous temperature from DS18B20 sensor
+ */
+ 
 float tempDHT_prev, tempDS_prev;
-byte h_prev, backlight=0, loopTime=0;
+byte h_prev;
+short backlight=0, readSensorPeriod=0;
 
 void setup() {
   pinMode(BTNPIN,INPUT);
-  pinMode(BEEPPIN,OUTPUT);
+  pinMode(PIRPIN,INPUT);
+
   lcd.begin(16,2);
   lcd.setBacklightPin(BACKLIGHTPIN,POSITIVE);
   lcd.setBacklight(1);
@@ -41,9 +51,10 @@ void setup() {
   lcd.print(F("Weather Station"));
   lcd.setCursor(0,1);
   lcd.print(VERSION);
-  tone(BEEPPIN,262,250);
   delay(2000);
   delay(dht.getMinimumSamplingPeriod());
+
+  readSensorPeriod = 10001; // read sensor in first loop
   
   lcd.clear();
   lcd.print(F("DHT: "));
@@ -60,23 +71,33 @@ void setup() {
 }
 
 void loop(){
-  byte i,h;
+  /*
+   * h        - humidity
+   * tempDHT  - temperature form DHT
+   * tempDS   - temperature form DS
+   * pirPIN   - state on input PIR
+   * btnPIN   - state on button
+   * data     - data from DS18B20
+   * type_s   - global variable from OneWire library
+   */
+  
+  byte i, h, pirPin, btnPin;
   byte type_s;
   byte data[12];
   float tempDHT, tempDS;
 
-  noTone(BEEPPIN);
+  pirPin = digitalRead(PIRPIN);
+  btnPin = digitalRead(BTNPIN);
   
-  if(digitalRead(BTNPIN) == HIGH){
+  if(pirPin == HIGH || btnPin == HIGH){
     lcd.setBacklight(1);
     backlight = 0;
-    tone(BEEPPIN,262,250);
   }
 
-  if(loopTime > 80 || backlight == 0) {
+  if(readSensorPeriod > 10000 || btnPin == HIGH) {
     lcd.setCursor(15,1);
     lcd.print(F("R"));
-    loopTime=0;
+    readSensorPeriod=0;
     ds.reset();
     ds.select(addr);
     ds.write(0x44); // start conversion, use ds.write(0x44,1) with parasite power on at the end
@@ -97,7 +118,7 @@ void loop(){
     int16_t raw = (data[1] << 8) | data[0];
     
     if (type_s) {
-      raw = raw << 3; // 9 bit resolution default
+      raw = raw << 3;             // 9 bit resolution default
       if (data[7] == 0x10) {
         // "count remain" gives full 12 bit resolution
         raw = (raw & 0xFFF0) + 12 - data[6];
@@ -119,10 +140,6 @@ void loop(){
     if(abs(tempDS-tempDS_prev)>=0.5  || abs(tempDHT-tempDHT_prev)>=0.5 || abs(h-h_prev)>=2) {
       lcd.setBacklight(1);
       backlight = 0;
-      for(i=0;i<2;i++){
-        tone(BEEPPIN, 262, 250);
-        delay(500);
-      }
     }
 
     tempDS_prev = tempDS;
@@ -139,19 +156,18 @@ void loop(){
     lcd.print(tempDS);
   }
   
-  if(loopTime%4==0){
+  if(readSensorPeriod%20==0){
     lcd.setCursor(15,1);
     lcd.print(F("*"));
   }
-  if(loopTime%8==0){
+  if(readSensorPeriod%40==0){
     lcd.setCursor(15,1);
     lcd.print(F(" "));
   }
   backlight++;
-  loopTime++;
+  readSensorPeriod++;
 
-  delay(250);
+  delay(50);
   
-  if(backlight > 40) lcd.setBacklight(0);
+  if(backlight > 400) lcd.setBacklight(0);
 }
-
