@@ -1,6 +1,6 @@
-#include <DHT.h>          // DHT11/DHT22/AM2302/RHT03
-#include <LiquidCrystal_I2C.h>
-#include <OneWire.h>
+#include <DHT.h>          		// DHT11/DHT22/AM2302/RHT03
+#include <LiquidCrystal_I2C.h>	// version 1.3.4
+#include <OneWire.h>			// version 2.2
 
 #define VERSION "0.4.9"
 #define DHTPIN 2          // DHT data pin
@@ -25,8 +25,8 @@ byte addr[8];
  */
  
 float tempDHT_prev, tempDS_prev;
-byte h_prev;
 short backlight=0, readSensorPeriod=0;
+byte h_prev;
 
 void setup() {
   pinMode(BTNPIN,INPUT);
