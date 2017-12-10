@@ -1,8 +1,10 @@
-#include <DHT.h>          		// DHT11/DHT22/AM2302/RHT03
-#include <LiquidCrystal_I2C.h>	// version 1.3.4
-#include <OneWire.h>			// version 2.2
+#include <DHT.h>          // DHT11/DHT22/AM2302/RHT03
+#include <LiquidCrystal_I2C.h>
+#include <OneWire.h>
+//#include "i2c_BMP280.h"
+#include <Adafruit_BMP085.h>
 
-#define VERSION "0.4.9"
+#define VERSION "0.6.0"
 #define DHTPIN 2          // DHT data pin
 #define DSPIN 5           // DS18B20 data pin
 #define BACKLIGHTPIN 3    // LCD backlight
@@ -13,6 +15,9 @@ LiquidCrystal_I2C lcd(0x27,2,1,0,4,5,6,7);
  
 DHT dht;
 OneWire ds(DSPIN);
+
+//BMP280 bmp280;
+Adafruit_BMP085 bmp180;
 
 byte addr[8];
 
@@ -25,13 +30,16 @@ byte addr[8];
  */
  
 float tempDHT_prev, tempDS_prev;
+int pascal_prev;
+byte h_prev, stringLength, positionCounter=0;
 short backlight=0, readSensorPeriod=0;
-byte h_prev;
+String content;
 
 void setup() {
+  Serial.begin(9600);
   pinMode(BTNPIN,INPUT);
   pinMode(PIRPIN,INPUT);
-
+  
   lcd.begin(16,2);
   lcd.setBacklightPin(BACKLIGHTPIN,POSITIVE);
   lcd.setBacklight(1);
@@ -45,6 +53,7 @@ void setup() {
       continue;
     if (OneWire::crc8(addr, 7) != addr[7]){
       lcd.print(F("DS:CRC is not valid!"));
+      delay(4000);
     }
     delay(250);
   }
@@ -55,19 +64,27 @@ void setup() {
   delay(dht.getMinimumSamplingPeriod());
 
   readSensorPeriod = 10001; // read sensor in first loop
+
+  /*if (bmp280.initialize())
+    Serial.println("Sensor found");
+  else {
+    Serial.println("Sensor missing");
+    while (1) {}
+  }
+
+  // onetime-measure:
+  bmp280.setEnabled(0);
+  bmp280.triggerMeasurement(); */
+
+  if (!bmp180.begin()) {
+    lcd.clear();
+    lcd.print("Could not find a");
+    lcd.setCursor(0,1);
+    lcd.print("valid BMP180.");
+    delay(4000);
+  }
   
   lcd.clear();
-  lcd.print(F("DHT: "));
-  lcd.setCursor(0,1);
-  lcd.print(F("DS: "));
-  lcd.setCursor(10,0);
-  lcd.print((char)223);
-  lcd.print(F("C"));
-  lcd.setCursor(15,0);
-  lcd.print(F("%"));
-  lcd.setCursor(10,1);
-  lcd.print((char)223);
-  lcd.print(F("C"));
 }
 
 void loop(){
@@ -84,19 +101,19 @@ void loop(){
   byte i, h, pirPin, btnPin;
   byte type_s;
   byte data[12];
+  int pascal,metersold;
   float tempDHT, tempDS;
 
   pirPin = digitalRead(PIRPIN);
   btnPin = digitalRead(BTNPIN);
+  
   
   if(pirPin == HIGH || btnPin == HIGH){
     lcd.setBacklight(1);
     backlight = 0;
   }
 
-  if(readSensorPeriod > 10000 || btnPin == HIGH) {
-    lcd.setCursor(15,1);
-    lcd.print(F("R"));
+  if(readSensorPeriod > 2000 || btnPin == HIGH) {
     readSensorPeriod=0;
     ds.reset();
     ds.select(addr);
@@ -136,8 +153,10 @@ void loop(){
   
     tempDHT = dht.getTemperature();
     h = dht.getHumidity();
-
-    if(abs(tempDS-tempDS_prev)>=0.5  || abs(tempDHT-tempDHT_prev)>=0.5 || abs(h-h_prev)>=2) {
+    pascal = bmp180.readPressure() / 100;
+    metersold = bmp180.readAltitude();
+    
+    if(abs(tempDS-tempDS_prev)>=0.5  || abs(tempDHT-tempDHT_prev)>=0.5 || abs(h-h_prev)>=2 || abs(pascal-pascal_prev) >= 2) {
       lcd.setBacklight(1);
       backlight = 0;
     }
@@ -145,29 +164,99 @@ void loop(){
     tempDS_prev = tempDS;
     tempDHT_prev = tempDHT;
     h_prev = h;
-    
-    lcd.setCursor(5,0);
-    if(tempDHT < 10) lcd.print(F(" "));
-    lcd.print(tempDHT);
-    lcd.setCursor(13,0);
-    lcd.print(h);
-    lcd.setCursor(5,1);
-    if(tempDS < 10 && tempDS >= 0) lcd.print(F(" "));
+    pascal_prev = pascal;
+
+    content = "Humidity:" + String(h) + "% Pressure: " + String(pascal) + "hPa Altitude: " + String(metersold) + "m";
+    stringLength = content.length();
+
+    if(tempDS < 0)
+      lcd.setCursor(0,0);
+    else
+      lcd.setCursor(1,0);
     lcd.print(tempDS);
+    lcd.print((char)223);
+    lcd.print(F("C"));
+    if(tempDS >= 0)
+      lcd.setCursor(9,0);
+    else
+      lcd.setCursor(8,0);
+    lcd.print(tempDHT);
+    lcd.print((char)223);
+    lcd.print(F("C"));
   }
-  
-  if(readSensorPeriod%20==0){
-    lcd.setCursor(15,1);
-    lcd.print(F("*"));
+  lcd.setCursor(0,1);
+
+// display the scrolling second line  
+  if(readSensorPeriod%2 == 0) {
+    if (positionCounter > stringLength)
+      positionCounter = 0;
+    if(positionCounter > stringLength-15){
+      lcd.print(content.substring(positionCounter,stringLength));
+      lcd.print(" ");
+      lcd.print(content.substring(0,14-(stringLength-positionCounter)));
+    } else {
+      lcd.print(content.substring(positionCounter,15+positionCounter));
+    }  
+    positionCounter++;
   }
-  if(readSensorPeriod%40==0){
-    lcd.setCursor(15,1);
-    lcd.print(F(" "));
-  }
+// end scrolling
+
   backlight++;
   readSensorPeriod++;
 
-  delay(50);
+  delay(200);
   
-  if(backlight > 400) lcd.setBacklight(0);
+  if(backlight > 100) lcd.setBacklight(0);
+
+  /*bmp280.awaitMeasurement();
+
+  float temperature;
+  bmp280.getTemperature(temperature);
+
+  float pascal;
+  bmp280.getPressure(pascal);
+
+  static float meters, metersold;
+  bmp280.getAltitude(meters);
+  metersold = (metersold * 10 + meters)/11;
+
+  bmp280.triggerMeasurement();
+  Serial.println("***********************BMP 280**********************************");
+  Serial.print(" HeightPT1: ");
+  Serial.print(metersold);
+  Serial.print(" m; Height: ");
+  Serial.print(meters);
+  Serial.print(" Pressure: ");
+  Serial.print(pascal);
+  Serial.print(" Pa; T: ");
+  Serial.print(temperature);
+  Serial.println(" C");
+
+  Serial.println("***********************BMP 180**********************************");
+  Serial.print("Temperature = ");
+  Serial.print(bmp180.readTemperature());
+  Serial.println(" *C");
+  Serial.print("Pressure = ");
+  Serial.print(bmp180.readPressure());
+  Serial.println(" Pa");
+  
+  // Calculate altitude assuming 'standard' barometric
+  // pressure of 1013.25 millibar = 101325 Pascal
+  Serial.print("Altitude = ");
+  Serial.print(bmp180.readAltitude());
+  Serial.println(" meters");
+
+  Serial.print("Pressure at sealevel (calculated) = ");
+  Serial.print(bmp180.readSealevelPressure());
+  Serial.println(" Pa");
+
+// you can get a more precise measurement of altitude
+// if you know the current sea level pressure which will
+// vary with weather and such. If it is 1015 millibars
+// that is equal to 101500 Pascals.
+  Serial.print("Real altitude = ");
+  Serial.print(bmp180.readAltitude(101500));
+  Serial.println(" meters"); 
+  Serial.println("*********************************************************");*/
 }
+
