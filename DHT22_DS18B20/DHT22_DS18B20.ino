@@ -177,9 +177,9 @@ void loop(){
     lcd.print((char)223);
     lcd.print(F("C"));
     if(tempDS >= 0)
-      lcd.setCursor(9,0);
+      lcd.setCursor(10,0);
     else
-      lcd.setCursor(8,0);
+      lcd.setCursor(9,0);
     lcd.print(tempDHT);
     lcd.print((char)223);
     lcd.print(F("C"));
@@ -190,12 +190,12 @@ void loop(){
   if(readSensorPeriod%2 == 0) {
     if (positionCounter > stringLength)
       positionCounter = 0;
-    if(positionCounter > stringLength-15){
+    if(positionCounter > stringLength-16){
       lcd.print(content.substring(positionCounter,stringLength));
       lcd.print(" ");
-      lcd.print(content.substring(0,14-(stringLength-positionCounter)));
+      lcd.print(content.substring(0,15-(stringLength-positionCounter)));
     } else {
-      lcd.print(content.substring(positionCounter,15+positionCounter));
+      lcd.print(content.substring(positionCounter,16+positionCounter));
     }  
     positionCounter++;
   }
