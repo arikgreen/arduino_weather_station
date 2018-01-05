@@ -4,7 +4,7 @@
 //#include "i2c_BMP280.h"
 #include <Adafruit_BMP085.h>
 
-#define VERSION "0.6.0"
+#define VERSION "0.6.5"
 #define DHTPIN 2          // DHT data pin
 #define DSPIN 5           // DS18B20 data pin
 #define BACKLIGHTPIN 3    // LCD backlight
@@ -32,11 +32,13 @@ byte addr[8];
 float tempDHT_prev, tempDS_prev;
 int pascal_prev;
 byte h_prev, stringLength, positionCounter=0;
-short backlight=0, readSensorPeriod=0;
+unsigned short backlightTime=10000, readSensorPeriod=60000, updateDS=1000, scrollTime=300;
+unsigned long prevBacklightTime=0, prevReadSensor=0, nowTime=0, prevUpdateDS=0, prevScrollTime=0;
+
 String content;
 
 void setup() {
-  Serial.begin(9600);
+  // Serial.begin(9600);
   pinMode(BTNPIN,INPUT);
   pinMode(PIRPIN,INPUT);
   
@@ -62,8 +64,6 @@ void setup() {
   lcd.print(VERSION);
   delay(2000);
   delay(dht.getMinimumSamplingPeriod());
-
-  readSensorPeriod = 10001; // read sensor in first loop
 
   /*if (bmp280.initialize())
     Serial.println("Sensor found");
@@ -101,25 +101,30 @@ void loop(){
   byte i, h, pirPin, btnPin;
   byte type_s;
   byte data[12];
-  int pascal,metersold;
+  int pascal;
   float tempDHT, tempDS;
 
   pirPin = digitalRead(PIRPIN);
   btnPin = digitalRead(BTNPIN);
   
-  
+  nowTime = millis();
+
   if(pirPin == HIGH || btnPin == HIGH){
     lcd.setBacklight(1);
-    backlight = 0;
+    prevBacklightTime = nowTime;
   }
 
-  if(readSensorPeriod > 2000 || btnPin == HIGH) {
-    readSensorPeriod=0;
+  if(nowTime-prevReadSensor >= readSensorPeriod || btnPin == HIGH || content.length() == 0) {
+    prevReadSensor = nowTime;
     ds.reset();
     ds.select(addr);
     ds.write(0x44); // start conversion, use ds.write(0x44,1) with parasite power on at the end
-    delay(1000);    // maybe 750ms is enough, maybe not
+                    // maybe 750ms is enough, maybe not
                     // we might do a ds.depower() here, but the reset will take care of it.
+  }
+
+  if(nowTime - prevUpdateDS>= updateDS) {
+    prevUpdateDS = nowTime;
     ds.reset();
     ds.select(addr);    
     ds.write(0xBE);         // Read Scratchpad
@@ -154,11 +159,11 @@ void loop(){
     tempDHT = dht.getTemperature();
     h = dht.getHumidity();
     pascal = bmp180.readPressure() / 100;
-    metersold = bmp180.readAltitude();
+    // metersold = bmp180.readAltitude();
     
     if(abs(tempDS-tempDS_prev)>=0.5  || abs(tempDHT-tempDHT_prev)>=0.5 || abs(h-h_prev)>=2 || abs(pascal-pascal_prev) >= 2) {
       lcd.setBacklight(1);
-      backlight = 0;
+      prevBacklightTime = millis();
     }
 
     tempDS_prev = tempDS;
@@ -166,7 +171,7 @@ void loop(){
     h_prev = h;
     pascal_prev = pascal;
 
-    content = "Humidity:" + String(h) + "% Pressure: " + String(pascal) + "hPa Altitude: " + String(metersold) + "m";
+    content = "Humidity:" + String(h) + "% Pressure: " + String(pascal) + "hPa"; // Altitude: " + String(metersold) + "m";
     stringLength = content.length();
 
     if(tempDS < 0)
@@ -184,30 +189,28 @@ void loop(){
     lcd.print((char)223);
     lcd.print(F("C"));
   }
-  lcd.setCursor(0,1);
 
-// display the scrolling second line  
-  if(readSensorPeriod%2 == 0) {
-    if (positionCounter > stringLength)
-      positionCounter = 0;
+  // display the scrolling second line
+  lcd.setCursor(0,1);
+  if(nowTime - prevScrollTime >= scrollTime) {
+    prevScrollTime = nowTime;
     if(positionCounter > stringLength-16){
       lcd.print(content.substring(positionCounter,stringLength));
       lcd.print(" ");
       lcd.print(content.substring(0,15-(stringLength-positionCounter)));
     } else {
       lcd.print(content.substring(positionCounter,16+positionCounter));
-    }  
-    positionCounter++;
+    }
+    if(positionCounter == stringLength) {
+      positionCounter = 0;
+    } else {
+      positionCounter++;
+    }
   }
-// end scrolling
+  // end scrolling
 
-  backlight++;
-  readSensorPeriod++;
-
-  delay(200);
+  if(nowTime - prevBacklightTime >= backlightTime) lcd.setBacklight(0);
   
-  if(backlight > 100) lcd.setBacklight(0);
-
   /*bmp280.awaitMeasurement();
 
   float temperature;
@@ -250,13 +253,12 @@ void loop(){
   Serial.print(bmp180.readSealevelPressure());
   Serial.println(" Pa");
 
-// you can get a more precise measurement of altitude
-// if you know the current sea level pressure which will
-// vary with weather and such. If it is 1015 millibars
-// that is equal to 101500 Pascals.
+  // you can get a more precise measurement of altitude
+  // if you know the current sea level pressure which will
+  // vary with weather and such. If it is 1015 millibars
+  // that is equal to 101500 Pascals.
   Serial.print("Real altitude = ");
   Serial.print(bmp180.readAltitude(101500));
   Serial.println(" meters"); 
   Serial.println("*********************************************************");*/
 }
-
