@@ -4,7 +4,7 @@
 //#include "i2c_BMP280.h"
 #include <Adafruit_BMP085.h>
 
-#define VERSION "0.6.5"
+#define VERSION "0.6.6"
 #define DHTPIN 2          // DHT data pin
 #define DSPIN 5           // DS18B20 data pin
 #define BACKLIGHTPIN 3    // LCD backlight
@@ -32,7 +32,7 @@ byte addr[8];
 float tempDHT_prev, tempDS_prev;
 int pascal_prev;
 byte h_prev, stringLength, positionCounter=0;
-unsigned short backlightTime=10000, readSensorPeriod=60000, updateDS=1000, scrollTime=300;
+unsigned short backlightTime=10000, readSensorPeriod=60000, updateDS=1000, scrollTime=400;
 unsigned long prevBacklightTime=0, prevReadSensor=0, nowTime=0, prevUpdateDS=0, prevScrollTime=0;
 
 String content;
