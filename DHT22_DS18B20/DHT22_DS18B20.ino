@@ -4,7 +4,7 @@
 //#include "i2c_BMP280.h"
 #include <Adafruit_BMP085.h>
 
-#define VERSION "0.6.6"
+#define VERSION "0.6.7"
 #define DHTPIN 2          // DHT data pin
 #define DSPIN 5           // DS18B20 data pin
 #define BACKLIGHTPIN 3    // LCD backlight
@@ -19,29 +19,44 @@ OneWire ds(DSPIN);
 //BMP280 bmp280;
 Adafruit_BMP085 bmp180;
 
-byte addr[8];
-
 /*
- * backlight          - backlight time
+ * backlightPeriod    - backlight time
  * readSensorPeriod   - the frequency of reading the sensors
- * h_prev             - previous humidity
- * tempDHT_prev       - previous temperature from DHT sensor
+ * scrollSpped        - display scrolling speed
+ * h_prev             - previous humidity DHT22
+ * tempDHT_prev       - previous temperature from DHT22 sensor
  * tempDS_prev        - previous temperature from DS18B20 sensor
+ * addr[8]            - address of DS18B20 sensor
+ * stringLength       - lenghth of second line
+ * positionCounter    - cursor position in second line
+ * prevXXXTime        - times of last action
+ * content            - second line
  */
- 
+
 float tempDHT_prev, tempDS_prev;
 int pascal_prev;
-byte h_prev, stringLength, positionCounter=0;
-unsigned short backlightTime=10000, readSensorPeriod=60000, updateDS=1000, scrollTime=400;
-unsigned long prevBacklightTime=0, prevReadSensor=0, nowTime=0, prevUpdateDS=0, prevScrollTime=0;
+byte addr[8], h_prev, stringLength, positionCounter=0;
+unsigned short backlightPeriod=10000, readSensorPeriod=60000, scrollSpeed=400;
+unsigned long prevBacklightTime=0, nowTime=0, prevSensorTime=0, prevScrollTime=0;
 
 String content;
 
+// byte arrowUp[8] = {
+//   B00100,
+//   B01110,
+//   B10101,
+//   B00100,
+//   B00100,
+//   B00100,
+//   B00100,
+//   B11111
+// };
+
 void setup() {
-  // Serial.begin(9600);
   pinMode(BTNPIN,INPUT);
   pinMode(PIRPIN,INPUT);
   
+  // lcd.createChar(0, arrowUp);
   lcd.begin(16,2);
   lcd.setBacklightPin(BACKLIGHTPIN,POSITIVE);
   lcd.setBacklight(1);
@@ -78,13 +93,11 @@ void setup() {
 
   if (!bmp180.begin()) {
     lcd.clear();
-    lcd.print("Could not find a");
+    lcd.print(F("Could not find a"));
     lcd.setCursor(0,1);
-    lcd.print("valid BMP180.");
+    lcd.print(F("valid BMP180."));
     delay(4000);
   }
-  
-  lcd.clear();
 }
 
 void loop(){
@@ -99,8 +112,6 @@ void loop(){
    */
   
   byte i, h, pirPin, btnPin;
-  byte type_s;
-  byte data[12];
   int pascal;
   float tempDHT, tempDS;
 
@@ -114,46 +125,12 @@ void loop(){
     prevBacklightTime = nowTime;
   }
 
-  if(nowTime-prevReadSensor >= readSensorPeriod || btnPin == HIGH || content.length() == 0) {
-    prevReadSensor = nowTime;
-    ds.reset();
-    ds.select(addr);
-    ds.write(0x44); // start conversion, use ds.write(0x44,1) with parasite power on at the end
-                    // maybe 750ms is enough, maybe not
-                    // we might do a ds.depower() here, but the reset will take care of it.
-  }
-
-  if(nowTime - prevUpdateDS>= updateDS) {
-    prevUpdateDS = nowTime;
-    ds.reset();
-    ds.select(addr);    
-    ds.write(0xBE);         // Read Scratchpad
-  
-    for (i = 0; i < 9; i++) {           // we need 9 bytes
-      data[i] = ds.read();
-    }
-  
-    // Convert the data to actual temperature
-    // because the result is a 16 bit signed integer, it should
-    // be stored to an "int16_t" type, which is always 16 bits
-    // even when compiled on a 32 bit processor.
-    int16_t raw = (data[1] << 8) | data[0];
+  if(nowTime - prevSensorTime >= readSensorPeriod || btnPin == HIGH || content.length() == 0) {
+    lcd.setCursor(0,1);
+    lcd.print(F("Read sensors.   "));
+    prevSensorTime = nowTime;
     
-    if (type_s) {
-      raw = raw << 3;             // 9 bit resolution default
-      if (data[7] == 0x10) {
-        // "count remain" gives full 12 bit resolution
-        raw = (raw & 0xFFF0) + 12 - data[6];
-      }
-    } else {
-      byte cfg = (data[4] & 0x60);
-      // at lower res, the low bits are undefined, so let's zero them
-      if (cfg == 0x00) raw = raw & ~7;  // 9 bit resolution, 93.75 ms
-      else if (cfg == 0x20) raw = raw & ~3; // 10 bit res, 187.5 ms
-      else if (cfg == 0x40) raw = raw & ~1; // 11 bit res, 375 ms
-      //// default is 12 bit resolution, 750 ms conversion time
-    }
-    tempDS = (float)raw / 16.0;
+    tempDS = readDS18B20() / 16.0;
     //fahrenheit = celsius * 1.8 + 32.0;
   
     tempDHT = dht.getTemperature();
@@ -171,13 +148,17 @@ void loop(){
     h_prev = h;
     pascal_prev = pascal;
 
-    content = "Humidity:" + String(h) + "% Pressure: " + String(pascal) + "hPa"; // Altitude: " + String(metersold) + "m";
+    content = "Humidity:" + String(h) + "%  Pressure:" + String(pascal) + "hPa "; // Altitude: " + String(metersold) + "m";
     stringLength = content.length();
 
-    if(tempDS < 0)
+    lcd.clear();
+    if(tempDS <= -10)
       lcd.setCursor(0,0);
-    else
+    else if(tempDS >= 10 || tempDS < 0)
       lcd.setCursor(1,0);
+    else
+      lcd.setCursor(2,0);
+    
     lcd.print(tempDS);
     lcd.print((char)223);
     lcd.print(F("C"));
@@ -192,7 +173,7 @@ void loop(){
 
   // display the scrolling second line
   lcd.setCursor(0,1);
-  if(nowTime - prevScrollTime >= scrollTime) {
+  if(nowTime - prevScrollTime >= scrollSpeed) {
     prevScrollTime = nowTime;
     if(positionCounter > stringLength-16){
       lcd.print(content.substring(positionCounter,stringLength));
@@ -209,7 +190,7 @@ void loop(){
   }
   // end scrolling
 
-  if(nowTime - prevBacklightTime >= backlightTime) lcd.setBacklight(0);
+  if(nowTime - prevBacklightTime >= backlightPeriod) lcd.setBacklight(0);
   
   /*bmp280.awaitMeasurement();
 
@@ -261,4 +242,46 @@ void loop(){
   Serial.print(bmp180.readAltitude(101500));
   Serial.println(" meters"); 
   Serial.println("*********************************************************");*/
+}
+
+float readDS18B20(){
+  byte i, type_s, data[12];
+  
+  ds.reset();
+  ds.select(addr);
+  ds.write(0x44);   
+  // start conversion, use ds.write(0x44,1) with parasite power on at the end
+  // maybe 750ms is enough, maybe not
+  // we might do a ds.depower() here, but the reset will take care of it.
+  delay(800);
+
+  ds.reset();
+  ds.select(addr);    
+  ds.write(0xBE);         // Read Scratchpad
+
+  for (i = 0; i < 9; i++) {           // we need 9 bytes
+    data[i] = ds.read();
+  }
+
+  // Convert the data to actual temperature
+  // because the result is a 16 bit signed integer, it should
+  // be stored to an "int16_t" type, which is always 16 bits
+  // even when compiled on a 32 bit processor.
+  int16_t raw = (data[1] << 8) | data[0];
+  
+  if (type_s) {
+    raw = raw << 3;             // 9 bit resolution default
+    if (data[7] == 0x10) {
+      // "count remain" gives full 12 bit resolution
+      raw = (raw & 0xFFF0) + 12 - data[6];
+    }
+  } else {
+    byte cfg = (data[4] & 0x60);
+    // at lower res, the low bits are undefined, so let's zero them
+    if (cfg == 0x00) raw = raw & ~7;  // 9 bit resolution, 93.75 ms
+    else if (cfg == 0x20) raw = raw & ~3; // 10 bit res, 187.5 ms
+    else if (cfg == 0x40) raw = raw & ~1; // 11 bit res, 375 ms
+    //// default is 12 bit resolution, 750 ms conversion time
+  }
+  return raw;
 }
