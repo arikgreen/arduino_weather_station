@@ -4,7 +4,7 @@
 //#include "i2c_BMP280.h"
 #include <Adafruit_BMP085.h>
 
-#define VERSION "0.6.7"
+#define VERSION "0.7.0"
 #define DHTPIN 2          // DHT data pin
 #define DSPIN 5           // DS18B20 data pin
 #define BACKLIGHTPIN 3    // LCD backlight
@@ -18,6 +18,15 @@ OneWire ds(DSPIN);
 
 //BMP280 bmp280;
 Adafruit_BMP085 bmp180;
+
+// begin ethernet configuration
+// ethernet interface mac address, must be unique on the LAN
+static byte mymac[] = { 0x74,0x69,0x69,0x2D,0x30,0x31 };
+static byte myip[] = { 192,168,1,100 };
+
+byte Ethernet::buffer[500];
+BufferFiller bfill;
+// end ethernet configuration
 
 /*
  * backlightPeriod    - backlight time
@@ -34,7 +43,7 @@ Adafruit_BMP085 bmp180;
  */
 
 float tempDHT_prev, tempDS_prev;
-int pascal_prev;
+unsigned short pascal_prev;
 byte addr[8], h_prev, stringLength, positionCounter=0;
 unsigned short backlightPeriod=10000, readSensorPeriod=60000, scrollSpeed=400;
 unsigned long prevBacklightTime=0, nowTime=0, prevSensorTime=0, prevScrollTime=0;
@@ -62,6 +71,14 @@ void setup() {
   lcd.setBacklight(1);
   lcd.backlight();
   
+  if (ether.begin(sizeof Ethernet::buffer, mymac) == 0) {
+    lcd.print(F("Failed to access"));
+    lcd.setCursor(0,1);
+    lcd.print(F("Eth controller"));
+  } else {
+    ether.staticSetup(myip);
+  }
+
   dht.setup(DHTPIN);            // DHT sensor initialization
   ds.reset_search();
   
@@ -112,8 +129,10 @@ void loop(){
    */
   
   byte i, h, pirPin, btnPin;
-  int pascal;
+  unsigned short pascal;
   float tempDHT, tempDS;
+  word len = ether.packetReceive();
+  word pos = ether.packetLoop(len);
 
   pirPin = digitalRead(PIRPIN);
   btnPin = digitalRead(BTNPIN);
@@ -162,13 +181,16 @@ void loop(){
     lcd.print(tempDS);
     lcd.print((char)223);
     lcd.print(F("C"));
-    if(tempDS >= 0)
+    if(tempDHT < 10)
       lcd.setCursor(10,0);
     else
       lcd.setCursor(9,0);
     lcd.print(tempDHT);
     lcd.print((char)223);
     lcd.print(F("C"));
+
+    if(pos) // check if valid tcp data is received
+      ether.httpServerReply(homePage(h,pascal,tempDS,tempDHT));  // send web page data
   }
 
   // display the scrolling second line
@@ -284,4 +306,25 @@ float readDS18B20(){
     //// default is 12 bit resolution, 750 ms conversion time
   }
   return raw;
+}
+
+static word homePage(byte humidity, unsigned short preasure, float tempOUT, float tempIN) {
+  long t = millis() / 1000;
+  word h = t / 3600;
+  byte m = (t / 60) % 60;
+  byte s = t % 60;
+  bfill = ether.tcpOffset();
+  bfill.emit_p(PSTR(
+    "HTTP/1.0 200 OK\r\n"
+    "Content-Type: text/html\r\n"
+    "Pragma: no-cache\r\n"
+    "\r\n"
+    "<!doctype html>\r\n"
+    "<html><head><meta charset=\"UTF-8\">\r\n"
+    "<meta http-equiv='refresh' content='3'>\r\n"
+    "<title>RBBB server</title></head>\r\n"
+    "<body><h1>Home Weather Station</h1><h2>Temperature - inside: $D$D</h2><h2>Humidity - inside: $D$D</h2><h2>Temperature - outside: $D$D</h2>"
+    "<h2>Preasure: $D$D</h2><p>Last update: $D$D:$D$D:$D$D</body></html>"),
+      tempIN, humidity, tempOUT, preasure,h/10, h%10, m/10, m%10, s/10, s%10);
+  return bfill.position();
 }

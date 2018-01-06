@@ -1,0 +1,5 @@
+http://www.pjrc.com/teensy/td_libs_OneWire.html
+https://github.com/jcw/ethercard/archive/master.zip
+https://bitbucket.org/fmalpartida/new-liquidcrystal/downloads/NewliquidCrystal_1.3.4.zip
+https://github.com/markruys/arduino-DHT/archive/master.zip
+https://codeload.github.com/adafruit/Adafruit-BMP085-Library/zip/master
