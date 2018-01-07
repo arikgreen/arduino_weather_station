@@ -24,7 +24,7 @@ Adafruit_BMP085 bmp180;
 // CS pin - D10
 // ethernet interface mac address, must be unique on the LAN
 static byte mymac[] = { 0x74,0x69,0x69,0x2D,0x30,0x31 };
-static byte myip[] = { 192,168,1,100 };
+static byte myip[] = { 192,168,0,100 };
 
 byte Ethernet::buffer[500];
 BufferFiller bfill;
@@ -52,24 +52,34 @@ unsigned long prevBacklightTime=0, nowTime=0, prevSensorTime=0, prevScrollTime=0
 
 String content;
 
-// byte arrowUp[8] = {
-//   B00100,
-//   B01110,
-//   B10101,
-//   B00100,
-//   B00100,
-//   B00100,
-//   B00100,
-//   B11111
-// };
+byte arrowUp[8] = {
+  B00100,
+  B01110,
+  B10101,
+  B00100,
+  B00100,
+  B00100,
+  B11111,
+  B00000
+};
+byte arrowDown[8] = {
+  B11111,
+  B00100,
+  B00100,
+  B00100,
+  B10101,
+  B01110,
+  B00100,
+  B00000
+};
 
 void setup() {
-  Serial.begin(9600);
   pinMode(BTNPIN,INPUT);
   pinMode(PIRPIN,INPUT);
   
-  // lcd.createChar(0, arrowUp);
   lcd.begin(16,2);
+  lcd.createChar(0, arrowUp);
+  lcd.createChar(1, arrowDown);
   lcd.setBacklightPin(BACKLIGHTPIN,POSITIVE);
   lcd.setBacklight(1);
   lcd.backlight();
@@ -124,6 +134,7 @@ void setup() {
     lcd.print(F("valid BMP180."));
     delay(4000);
   }
+  lcd.clear();
 }
 
 void loop(){
@@ -161,8 +172,8 @@ void loop(){
   }
 
   if(nowTime - prevSensorTime >= readSensorPeriod || btnPin == HIGH || content.length() == 0) {
-    lcd.setCursor(0,1);
-    lcd.print(F("Read sensors.   "));
+    lcd.home();
+    lcd.print(F("R"));
     prevSensorTime = nowTime;
     
     tempDS = readDS18B20() / 16.0;
@@ -178,15 +189,14 @@ void loop(){
       prevBacklightTime = millis();
     }
 
-    tempDS_prev = tempDS;
-    tempDHT_prev = tempDHT;
-    h_prev = h;
-    pascal_prev = pascal;
-
     content = "Humidity:" + String(h) + "%  Pressure:" + String(pascal) + "hPa "; // Altitude: " + String(metersold) + "m";
     stringLength = content.length();
 
-    lcd.clear();
+    //  clear previous temperature
+    lcd.home();
+    lcd.print(F("  "));
+    lcd.setCursor(9,0);
+    lcd.print(F(" "));
     if(tempDS <= -10)
       lcd.setCursor(0,0);
     else if(tempDS >= 10 || tempDS < 0)
@@ -194,16 +204,29 @@ void loop(){
     else
       lcd.setCursor(2,0);
     
-    lcd.print(tempDS);
+    lcd.print(tempDS,1);
     lcd.print((char)223);
     lcd.print(F("C"));
+    if(tempDS > tempDS_prev)
+      lcd.write((byte)0);
+    else if(tempDS < tempDS_prev)
+      lcd.write((byte)1);
     if(tempDHT < 10)
       lcd.setCursor(10,0);
     else
       lcd.setCursor(9,0);
-    lcd.print(tempDHT);
+    lcd.print(tempDHT,1);
     lcd.print((char)223);
     lcd.print(F("C"));
+    if(tempDHT > tempDHT_prev)
+      lcd.write((byte)0);
+    else if(tempDHT < tempDHT_prev)
+      lcd.write((byte)1);
+
+    tempDS_prev = tempDS;
+    tempDHT_prev = tempDHT;
+    h_prev = h;
+    pascal_prev = pascal;
   }
 
   // display the scrolling second line
@@ -334,10 +357,10 @@ static word homePage(byte humidity, unsigned short preasure, float tempOUT, floa
     "\r\n"
     "<!doctype html>"
     "<html><head><meta charset=\"UTF-8\">"
-    "<meta http-equiv='refresh' content='3'>"
+    "<meta http-equiv='refresh' content='60'>"
     "<title>Home Weather Station</title></head>"
-    "<body><h1>Home Weather Station</h1><h2>Temperature - inside: $T</h2><h2>Humidity - inside: $D</h2><h2>Temperature - outside: $T</h2>"
-    "<h2>Preasure: $D</h2><p>Last update: $D$D:$D$D:$D$D</body></html>"),
+    "<body><h1>Home Weather Station</h1><h2>Temperature - inside: $T&deg;C</h2><h2>Humidity - inside: $D%</h2><h2>Temperature - outside: $T&deg;C</h2>"
+    "<h2>Preasure: $DhPa</h2><p>Last update: $D$D:$D$D:$D$D - <span style=\"font-size: 0.8em;\">beta</span></p></body></html>"),
       tempIN, humidity, tempOUT, preasure, h/10, h%10, m/10, m%10, s/10, s%10);
   return bfill.position();
 }

@@ -17,7 +17,7 @@
 #define READBUF   1
 #define BUFCOUNT  2
 
-//#define FLOATEMIT // uncomment line to enable $T in emit_P for float emitting
+#define FLOATEMIT // uncomment line to enable $T in emit_P for float emitting
 
 byte Stash::map[SCRATCH_MAP_SIZE];
 Stash::Block Stash::bufs[BUFCOUNT];
@@ -338,7 +338,7 @@ void BufferFiller::emit_p(const char* fmt PROGMEM, ...) {
             break;
 #ifdef FLOATEMIT
         case 'T':
-            dtostrf    (    va_arg(ap, double), 10, 3, (char*)ptr );
+            dtostrf(va_arg(ap, double), 10, 1, (char*)ptr );
             break;
 #endif
         case 'H': {
