@@ -1,0 +1,19 @@
+# ignore default files
+.travis.yml
+CONTRIBUTING.md
+dhcp.cpp
+dns.cpp
+docu.dox
+Doxyfile
+Doxylogo.png
+Doxymods.css
+enc28j60.cpp
+enc28j60.h
+EtherCard.h
+library.json
+LICENSE
+net.h
+README.md
+tcpip.cpp
+udpserver.cpp
+webutil.cpp

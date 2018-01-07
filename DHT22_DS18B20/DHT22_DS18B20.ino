@@ -3,6 +3,7 @@
 #include <OneWire.h>
 //#include "i2c_BMP280.h"
 #include <Adafruit_BMP085.h>
+#include <EtherCard.h>
 
 #define VERSION "0.7.0"
 #define DHTPIN 2          // DHT data pin
@@ -20,6 +21,7 @@ OneWire ds(DSPIN);
 Adafruit_BMP085 bmp180;
 
 // begin ethernet configuration
+// CS pin - D10
 // ethernet interface mac address, must be unique on the LAN
 static byte mymac[] = { 0x74,0x69,0x69,0x2D,0x30,0x31 };
 static byte myip[] = { 192,168,1,100 };
@@ -62,6 +64,7 @@ String content;
 // };
 
 void setup() {
+  Serial.begin(9600);
   pinMode(BTNPIN,INPUT);
   pinMode(PIRPIN,INPUT);
   
@@ -72,11 +75,17 @@ void setup() {
   lcd.backlight();
   
   if (ether.begin(sizeof Ethernet::buffer, mymac) == 0) {
-    lcd.print(F("Failed to access"));
+    lcd.print(F("Failed ethernet"));
     lcd.setCursor(0,1);
-    lcd.print(F("Eth controller"));
+    lcd.print(F("controller"));
+    delay(5000);
   } else {
+    lcd.print(F("Set IP:"));
+    lcd.setCursor(0,1);
+    lcd.print(String(myip[0])+F(".")+String(myip[1])+F(".")+String(myip[2])+F(".")+String(myip[3]));
     ether.staticSetup(myip);
+    delay(3000);
+    lcd.clear();
   }
 
   dht.setup(DHTPIN);            // DHT sensor initialization
@@ -131,13 +140,20 @@ void loop(){
   byte i, h, pirPin, btnPin;
   unsigned short pascal;
   float tempDHT, tempDS;
-  word len = ether.packetReceive();
-  word pos = ether.packetLoop(len);
-
+  word len, pos;
+  
   pirPin = digitalRead(PIRPIN);
   btnPin = digitalRead(BTNPIN);
   
   nowTime = millis();
+
+  if(nowTime > 10000) {
+    len = ether.packetReceive();
+    pos = ether.packetLoop(len);
+    if(pos) {// check if valid tcp data is received
+      ether.httpServerReply(homePage(h_prev,pascal_prev,tempDS_prev,tempDHT_prev));  // send web page data
+    }
+  }
 
   if(pirPin == HIGH || btnPin == HIGH){
     lcd.setBacklight(1);
@@ -188,9 +204,6 @@ void loop(){
     lcd.print(tempDHT);
     lcd.print((char)223);
     lcd.print(F("C"));
-
-    if(pos) // check if valid tcp data is received
-      ether.httpServerReply(homePage(h,pascal,tempDS,tempDHT));  // send web page data
   }
 
   // display the scrolling second line
@@ -319,12 +332,12 @@ static word homePage(byte humidity, unsigned short preasure, float tempOUT, floa
     "Content-Type: text/html\r\n"
     "Pragma: no-cache\r\n"
     "\r\n"
-    "<!doctype html>\r\n"
-    "<html><head><meta charset=\"UTF-8\">\r\n"
-    "<meta http-equiv='refresh' content='3'>\r\n"
-    "<title>RBBB server</title></head>\r\n"
-    "<body><h1>Home Weather Station</h1><h2>Temperature - inside: $D$D</h2><h2>Humidity - inside: $D$D</h2><h2>Temperature - outside: $D$D</h2>"
-    "<h2>Preasure: $D$D</h2><p>Last update: $D$D:$D$D:$D$D</body></html>"),
-      tempIN, humidity, tempOUT, preasure,h/10, h%10, m/10, m%10, s/10, s%10);
+    "<!doctype html>"
+    "<html><head><meta charset=\"UTF-8\">"
+    "<meta http-equiv='refresh' content='3'>"
+    "<title>Home Weather Station</title></head>"
+    "<body><h1>Home Weather Station</h1><h2>Temperature - inside: $T</h2><h2>Humidity - inside: $D</h2><h2>Temperature - outside: $T</h2>"
+    "<h2>Preasure: $D</h2><p>Last update: $D$D:$D$D:$D$D</body></html>"),
+      tempIN, humidity, tempOUT, preasure, h/10, h%10, m/10, m%10, s/10, s%10);
   return bfill.position();
 }
