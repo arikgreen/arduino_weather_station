@@ -358,9 +358,11 @@ static word homePage(byte humidity, unsigned short preasure, float tempOUT, floa
     "<!doctype html>"
     "<html><head><meta charset=\"UTF-8\">"
     "<meta http-equiv='refresh' content='60'>"
+    "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
     "<title>Home Weather Station</title></head>"
-    "<body><h1>Home Weather Station</h1><h2>Temperature - inside: $T&deg;C</h2><h2>Humidity - inside: $D%</h2><h2>Temperature - outside: $T&deg;C</h2>"
-    "<h2>Preasure: $DhPa</h2><p>Last update: $D$D:$D$D:$D$D - <span style=\"font-size: 0.8em;\">beta</span></p></body></html>"),
+    "<body><h1>Home Weather Station</h1><h2>Temperature - inside: <data>$T</data>&deg;C</h2><h2>Humidity - inside: <span><data>$D</data>%</h2>"
+    "<h2>Temperature - outside: <data>$T</data>&deg;C</h2><h2>Preasure: <data>$D</data>hPa</h2><p>Last update: $D$D:$D$D:$D$D - <span style=\"font-size: 0.8em;\">beta</span></p>"
+    "</body></html>"),
       tempIN, humidity, tempOUT, preasure, h/10, h%10, m/10, m%10, s/10, s%10);
   return bfill.position();
 }
