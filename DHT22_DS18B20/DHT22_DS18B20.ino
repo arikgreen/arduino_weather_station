@@ -10,7 +10,7 @@
 #define DSPIN 5           // DS18B20 data pin
 #define BACKLIGHTPIN 3    // LCD backlight
 #define BTNPIN 6          // button
-#define PIRPIN 8          // PIR
+#define PIRPIN 7          // PIR
 
 LiquidCrystal_I2C lcd(0x27,2,1,0,4,5,6,7);
  
@@ -110,7 +110,7 @@ void setup() {
     }
     delay(250);
   }
-  lcd.print(F("Weather Station"));
+  lcd.print(F("Weather Station")); 
   lcd.setCursor(0,1);
   lcd.print(VERSION);
   delay(2000);
